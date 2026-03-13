@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 import sys
 import time
 from typing import Any, Iterator, List, Optional
@@ -17,6 +18,9 @@ from config import Configuration, SearchAPI
 from graph.graph import build_graph
 
 # ── 日志 ──────────────────────────────────────────────────────────────────────
+logging.basicConfig(level=logging.INFO, stream=sys.stderr,
+                    format="%(asctime)s | %(levelname)-5s | %(name)s | %(message)s",
+                    datefmt="%H:%M:%S")
 logger.add(
     sys.stderr,
     level="INFO",
