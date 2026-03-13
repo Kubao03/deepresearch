@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 
+from langchain_core.runnables import RunnableConfig
 from langgraph.types import interrupt
 
 from graph.state import ResearchState
@@ -15,7 +16,7 @@ from services.summarizer import SummarizationService
 logger = logging.getLogger(__name__)
 
 
-def planner_node(state: ResearchState, config: dict) -> dict:
+def planner_node(state: ResearchState, config: RunnableConfig) -> dict:
     """将研究主题拆解为结构化 TODO 列表，并通过 interrupt() 等待用户确认。
 
     interrupt() 触发后：
@@ -33,7 +34,7 @@ def planner_node(state: ResearchState, config: dict) -> dict:
     return {"todo_list": reviewed, "research_loop_count": 0}
 
 
-def executor_node(state: ResearchState, config: dict) -> dict:
+def executor_node(state: ResearchState, config: RunnableConfig) -> dict:
     """对 todo_list 中每个子任务执行搜索 + 摘要，结果追加到 summaries。
 
     operator.add reducer 会将本次的 new_summaries 追加到已有的 summaries，
@@ -88,7 +89,7 @@ def executor_node(state: ResearchState, config: dict) -> dict:
     }
 
 
-def reporter_node(state: ResearchState, config: dict) -> dict:
+def reporter_node(state: ResearchState, config: RunnableConfig) -> dict:
     """整合所有子任务摘要，生成最终投资研究报告。"""
     app_config = config["configurable"]["app_config"]
     reporter = ReportingService(app_config)

@@ -34,10 +34,13 @@ def build_graph(db_path: str = "./data"):
 
 def _make_checkpointer(db_path: str):
     try:
+        import sqlite3
+
         from langgraph.checkpoint.sqlite import SqliteSaver
 
         os.makedirs(db_path, exist_ok=True)
-        return SqliteSaver.from_conn_string(f"{db_path}/checkpoints.db")
+        conn = sqlite3.connect(f"{db_path}/checkpoints.db", check_same_thread=False)
+        return SqliteSaver(conn)
     except Exception:
         from langgraph.checkpoint.memory import MemorySaver
 

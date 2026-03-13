@@ -77,7 +77,7 @@ def prepare_research_context(
 # ── 后端实现 ──────────────────────────────────────────────────────────────────
 
 def _duckduckgo_search(query: str, max_results: int = 5) -> dict[str, Any]:
-    from duckduckgo_search import DDGS
+    from ddgs import DDGS
 
     with DDGS() as ddgs:
         raw = list(ddgs.text(query, max_results=max_results))

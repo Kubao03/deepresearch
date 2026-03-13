@@ -9,7 +9,7 @@ langchain-core>=1.0.0
 langchain-openai>=1.0.0
 
 # 搜索
-duckduckgo-search>=9.6.1
+ddgs>=9.6.1
 
 # 工具
 python-dotenv>=1.0.1
