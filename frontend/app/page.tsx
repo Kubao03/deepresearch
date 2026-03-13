@@ -367,8 +367,8 @@ function TodoReviewPanel({
           <h2 className="text-base font-semibold text-white">研究计划</h2>
           <p className="text-xs text-gray-500 mt-0.5">请确认或修改以下研究任务，然后开始执行</p>
         </div>
-        <span className="text-xs text-gray-500 bg-white/5 px-2 py-1 rounded-full border border-white/8">
-          {items.length} 项任务
+        <span className="text-xs text-gray-400 tabular-nums">
+          {items.length} 项
         </span>
       </div>
 
