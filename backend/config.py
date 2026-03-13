@@ -10,7 +10,7 @@ from typing import Any, Optional
 from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
-load_dotenv(Path(__file__).parent.parent / ".env")
+load_dotenv(Path(__file__).parent / ".env")
 
 
 class SearchAPI(Enum):

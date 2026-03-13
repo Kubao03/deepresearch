@@ -52,8 +52,20 @@ def _build_config(thread_id: str, search_api: Optional[SearchAPI] = None) -> dic
     }
 
 
+def _json_default(obj: Any) -> Any:
+    """处理 LangGraph 内部类型（如 Interrupt）的 JSON 序列化。"""
+    try:
+        from langgraph.types import Interrupt
+        if isinstance(obj, Interrupt):
+            return {"value": obj.value, "id": obj.id}
+    except ImportError:
+        pass
+    # 兜底：转字符串
+    return str(obj)
+
+
 def _sse(payload: Any) -> str:
-    return f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
+    return f"data: {json.dumps(payload, ensure_ascii=False, default=_json_default)}\n\n"
 
 
 # ── 应用工厂 ──────────────────────────────────────────────────────────────────
@@ -124,11 +136,12 @@ def create_app() -> FastAPI:
         config = _build_config(payload.thread_id)
 
         def event_stream() -> Iterator[str]:
+            yield _sse({"type": "resume_start"})  # 立即打通 SSE 连接，防止代理缓冲
             try:
-                for event in graph.stream(
+                for mode, event in graph.stream(
                     Command(resume=payload.reviewed_todo_list),
                     config=config,
-                    stream_mode="updates",
+                    stream_mode=["updates", "custom"],
                 ):
                     yield _sse(event)
             except Exception as exc:

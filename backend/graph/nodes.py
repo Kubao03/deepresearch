@@ -5,6 +5,7 @@ from __future__ import annotations
 import logging
 
 from langchain_core.runnables import RunnableConfig
+from langgraph.config import get_stream_writer
 from langgraph.types import interrupt
 
 from graph.state import ResearchState
@@ -43,12 +44,24 @@ def executor_node(state: ResearchState, config: RunnableConfig) -> dict:
     app_config = config["configurable"]["app_config"]
     summarizer = SummarizationService(app_config)
     new_summaries = []
+    writer = get_stream_writer()
 
-    for task in state["todo_list"]:
+    todo = state["todo_list"]
+    total = sum(1 for t in todo if t["status"] != "completed")
+
+    done_count = 0
+    for task in todo:
         if task["status"] == "completed":
             continue
 
         logger.info("执行任务 [%d] %s", task["id"], task["title"])
+        writer({
+            "type": "task_start",
+            "task_id": task["id"],
+            "task_title": task["title"],
+            "current": done_count + 1,
+            "total": total,
+        })
 
         search_result, _, answer_text, backend = dispatch_search(
             task["query"], app_config, state["research_loop_count"]
@@ -65,6 +78,8 @@ def executor_node(state: ResearchState, config: RunnableConfig) -> dict:
                     "sources_summary": "",
                 }
             )
+            done_count += 1
+            writer({"type": "task_done", "task_id": task["id"], "current": done_count, "total": total})
             continue
 
         sources_summary, context = prepare_research_context(
@@ -82,6 +97,8 @@ def executor_node(state: ResearchState, config: RunnableConfig) -> dict:
                 "sources_summary": sources_summary,
             }
         )
+        done_count += 1
+        writer({"type": "task_done", "task_id": task["id"], "task_title": task["title"], "current": done_count, "total": total})
 
     return {
         "summaries": new_summaries,
