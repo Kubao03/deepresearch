@@ -1,13 +1,5 @@
-export interface TodoItem {
-  id: number
-  title: string
-  intent: string
-  query: string
-  status: 'pending' | 'in_progress' | 'completed' | 'skipped'
-  summary?: string
-  sources_summary?: string
-  source_type?: string
-}
+import type { TodoItem } from './types'
+export type { TodoItem }
 
 async function parseSSEStream(
   response: Response,
@@ -90,7 +82,7 @@ export async function streamResearch(
     body.search_api = payload.search_api
   }
 
-  const response = await fetch('/api/research/stream', {
+  const response = await fetch('http://localhost:8000/research/stream', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -110,7 +102,7 @@ export async function resumeResearch(
   onEvent: (event: unknown) => void,
   signal?: AbortSignal
 ): Promise<void> {
-  const response = await fetch('/api/research/resume', {
+  const response = await fetch('http://localhost:8000/research/resume', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
