@@ -13,22 +13,19 @@ from typing import Any, AsyncIterator, List
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from loguru import logger
+logger = logging.getLogger(__name__)
 from pydantic import BaseModel, Field
 
 from config import Configuration
 from graph.graph import build_graph
-from tools.mcp_client import start_mcp, stop_mcp
+from tools import start_mcp, stop_mcp
 
 # ── 日志 ──────────────────────────────────────────────────────────────────────
-logging.basicConfig(level=logging.INFO, stream=sys.stderr,
-                    format="%(asctime)s | %(levelname)-5s | %(name)s | %(message)s",
-                    datefmt="%H:%M:%S")
-logger.add(
-    sys.stderr,
-    level="INFO",
-    format="<green>{time:HH:mm:ss}</green> | <level>{level:<5}</level> | <cyan>{function}</cyan> | <level>{message}</level>",
-    colorize=True,
+logging.basicConfig(
+    level=logging.INFO,
+    stream=sys.stderr,
+    format="%(asctime)s | %(levelname)-5s | %(name)s | %(message)s",
+    datefmt="%H:%M:%S",
 )
 
 
