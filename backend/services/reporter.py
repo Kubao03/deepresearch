@@ -62,12 +62,21 @@ class ReportingService:
 
         parts = []
         for s in state["summaries"]:
-            source_label = {"web": "公开搜索", "mcp": "结构化数据", "rag": "私有库"}.get(
-                s.get("source_type", "web"), "公开搜索"
-            )
-            parts.append(
-                f"### 任务 {s.get('task_id', '?')}：{s.get('task_title', '')}\n"
-                f"来源类型：{source_label}\n\n"
+            block = (
+                f"### 任务 {s.get('task_id', '?')}：{s.get('task_title', '')}\n\n"
                 f"{s.get('content', '暂无可用信息')}\n"
             )
+
+            sources: list = s.get("sources") or []
+            if sources:
+                source_lines = []
+                for src in sources:
+                    if src.get("type") == "web":
+                        source_lines.append(f"- [公开搜索] {src.get('title', '')} {src.get('url', '')}")
+                    elif src.get("type") == "akshare":
+                        source_lines.append(f"- [结构化数据] {src.get('interface', '')}：{src.get('desc', '')}")
+                if source_lines:
+                    block += "\n**来源**：\n" + "\n".join(source_lines) + "\n"
+
+            parts.append(block)
         return "\n".join(parts)

@@ -20,7 +20,7 @@ def get_tools() -> list:
     logger.info("Tavily 工具已加载")
     return [TavilySearch(
         max_results=3,
-        search_depth="basic",      # basic 比 advanced 省 token
+        search_depth="advanced",      
         include_raw_content=False, # 不要原始 HTML
         include_images=False,
     )]
