@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import type { Phase, ProgressEvent, TodoItem } from '@/lib/types'
+import type { Phase, ProgressEvent, TodoItem, CompanyInfo } from '@/lib/types'
 import { streamResearch, resumeResearch } from '@/lib/api'
 import { LogoIcon, SpinnerIcon } from '@/components/icons'
 import { ProgressTimeline } from '@/components/ProgressTimeline'
@@ -19,6 +19,7 @@ export default function Home() {
   const [finalReport, setFinalReport] = useState('')
   const [error, setError] = useState('')
   const [resumeLoading, setResumeLoading] = useState(false)
+  const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null)
 
   const eventIdRef = useRef(0)
   const abortRef = useRef<AbortController | null>(null)
@@ -49,10 +50,15 @@ export default function Home() {
       }
 
       if (ev.__interrupt__ && Array.isArray(ev.__interrupt__)) {
-        const interrupts = ev.__interrupt__ as Array<{ value?: { type?: string; todo_list?: TodoItem[] } }>
+        const interrupts = ev.__interrupt__ as Array<{ value?: { type?: string; todo_list?: TodoItem[]; ticker?: string; company?: string; market?: string } }>
         for (const interrupt of interrupts) {
           if (interrupt.value?.type === 'todo_review' && Array.isArray(interrupt.value.todo_list)) {
             setTodoList(interrupt.value.todo_list)
+            setCompanyInfo({
+              ticker: interrupt.value.ticker ?? '',
+              company: interrupt.value.company ?? '',
+              market: interrupt.value.market ?? '',
+            })
             onPhaseChange('reviewing')
             addEvent(`规划完成，共 ${interrupt.value.todo_list.length} 个研究任务，等待确认`, 'success')
             return
@@ -159,6 +165,7 @@ export default function Home() {
     setError('')
     setThreadId('')
     setTodoList([])
+    setCompanyInfo(null)
   }, [])
 
   useEffect(() => () => { abortRef.current?.abort() }, [])
@@ -181,7 +188,21 @@ export default function Home() {
           <div className="flex items-center gap-3">
             <LogoIcon />
             <div>
-              <h1 className="text-sm font-semibold text-white">A股深度研究助手</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-sm font-semibold text-white">
+                  {companyInfo?.company || topic}
+                </h1>
+                {companyInfo?.ticker && (
+                  <span className="text-xs text-blue-400 font-mono bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded">
+                    {companyInfo.ticker}
+                  </span>
+                )}
+                {companyInfo?.market && (
+                  <span className="text-xs text-gray-500 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded">
+                    {companyInfo.market}
+                  </span>
+                )}
+              </div>
               <p className="text-xs text-gray-500 truncate max-w-sm">{topic}</p>
             </div>
           </div>
@@ -231,6 +252,7 @@ export default function Home() {
             {phase === 'reviewing' && (
               <TodoReviewPanel
                 todoList={todoList}
+                companyInfo={companyInfo}
                 onConfirm={handleResume}
                 onCancel={handleCancel}
                 loading={resumeLoading}

@@ -1,17 +1,19 @@
 'use client'
 
 import { useState, useCallback, useEffect } from 'react'
-import type { TodoItem } from '@/lib/types'
+import type { TodoItem, CompanyInfo } from '@/lib/types'
 import { StatusBadge } from './ProgressTimeline'
 import { CheckIcon, SpinnerIcon, PlusIcon, TrashIcon } from './icons'
 
 export function TodoReviewPanel({
   todoList,
+  companyInfo,
   onConfirm,
   onCancel,
   loading,
 }: {
   todoList: TodoItem[]
+  companyInfo: CompanyInfo | null
   onConfirm: (items: TodoItem[]) => void
   onCancel: () => void
   loading: boolean
@@ -70,7 +72,23 @@ export function TodoReviewPanel({
       <div className="flex items-center justify-between mb-4">
         <div>
           <h2 className="text-base font-semibold text-white">研究计划</h2>
-          <p className="text-xs text-gray-500 mt-0.5">请确认或修改以下研究任务，然后开始执行</p>
+          {companyInfo ? (
+            <div className="flex items-center gap-1.5 mt-1">
+              <span className="text-xs text-gray-300">{companyInfo.company}</span>
+              {companyInfo.ticker && (
+                <span className="text-xs text-blue-400 font-mono bg-blue-500/10 border border-blue-500/20 px-1.5 py-0.5 rounded">
+                  {companyInfo.ticker}
+                </span>
+              )}
+              {companyInfo.market && (
+                <span className="text-xs text-gray-500 bg-white/5 border border-white/10 px-1.5 py-0.5 rounded">
+                  {companyInfo.market}
+                </span>
+              )}
+            </div>
+          ) : (
+            <p className="text-xs text-gray-500 mt-0.5">请确认或修改以下研究任务，然后开始执行</p>
+          )}
         </div>
         <span className="text-xs text-gray-400 tabular-nums">{items.length} 项</span>
       </div>

@@ -16,6 +16,12 @@ export interface Source {
   desc?: string;      // 针对 akshare
 }
 
+export interface CompanyInfo {
+  ticker: string
+  company: string
+  market: string
+}
+
 export interface TodoItem {
   id: number;
   title: string;
