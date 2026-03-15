@@ -18,7 +18,5 @@ aiosqlite==0.22.1
 # 工具
 python-dotenv>=1.0.1
 pydantic==2.12.5
+uv
 
-# AKShare MCP 服务通过 uvx 运行，无需 pip 安装
-# 安装 uv：pip install uv  或  curl -LsSf https://astral.sh/uv/install.sh | sh
-# 运行：uvx mcp-aktools（由后端启动时自动调用）

@@ -82,7 +82,8 @@ export async function streamResearch(
     body.search_api = payload.search_api
   }
 
-  const response = await fetch('http://localhost:8000/research/stream', {
+  const base = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:8000'
+  const response = await fetch(`${base}/research/stream`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -102,7 +103,8 @@ export async function resumeResearch(
   onEvent: (event: unknown) => void,
   signal?: AbortSignal
 ): Promise<void> {
-  const response = await fetch('http://localhost:8000/research/resume', {
+  const base = process.env.NEXT_PUBLIC_API_BASE ?? 'http://localhost:8000'
+  const response = await fetch(`${base}/research/resume`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload),
