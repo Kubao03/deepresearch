@@ -8,7 +8,7 @@ from langchain_openai import ChatOpenAI
 
 from config import Configuration
 from graph.state import ResearchState
-from prompts import reporter_human, reporter_system
+from prompts import get_current_date, reporter_human, reporter_system
 from utils import strip_thinking_tokens, strip_tool_calls
 
 
@@ -40,7 +40,8 @@ class ReportingService:
         tasks_block = self._build_tasks_block(state)
 
         response = self._chain.invoke(
-            {
+            {   
+                "current_date": get_current_date(),
                 "topic": state["topic"],
                 "tasks_block": tasks_block,
             }
