@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-from enum import Enum
 from pathlib import Path
 from typing import Any, Optional
 
@@ -11,11 +10,6 @@ from dotenv import load_dotenv
 from pydantic import BaseModel, Field
 
 load_dotenv(Path(__file__).parent / ".env")
-
-
-class SearchAPI(Enum):
-    DUCKDUCKGO = "duckduckgo"
-    TAVILY = "tavily"
 
 
 class Configuration(BaseModel):
@@ -33,10 +27,6 @@ class Configuration(BaseModel):
     llm_base_url: Optional[str] = Field(default=None)
     llm_timeout: int = Field(default=60)
 
-    # 搜索
-    search_api: SearchAPI = Field(default=SearchAPI.DUCKDUCKGO)
-    fetch_full_page: bool = Field(default=True)
-
     # 输出处理
     strip_thinking_tokens: bool = Field(default=True)
 
@@ -50,8 +40,6 @@ class Configuration(BaseModel):
             "llm_api_key": "LLM_API_KEY",
             "llm_base_url": "LLM_BASE_URL",
             "llm_timeout": "LLM_TIMEOUT",
-            "search_api": "SEARCH_API",
-            "fetch_full_page": "FETCH_FULL_PAGE",
             "strip_thinking_tokens": "STRIP_THINKING_TOKENS",
         }
         for field_name, env_key in env_map.items():
