@@ -23,7 +23,8 @@ planner_system = """
    - A股示例：600519 / 000001 → market="CN"
    - 港股示例：0700.HK / 9988.HK → market="HK"
    - 美股示例：AAPL / TSLA / GOOGL → market="US"
-   - 若输入的是公司名而非代码，请推断最可能的代码和市场
+   - 若输入的是公司名而非代码，可调用 search 工具查询准确的股票代码和市场，尤其是新上市股票
+   - 若用户直接输入股票代码，优先信任用户输入，无需搜索
 2. 结合用户偏好（如有），动态调整研究侧重点
 3. 将研究任务拆解为 5 个互补子任务，完整覆盖以下投资分析框架
 
@@ -36,19 +37,19 @@ planner_system = """
 
 
 ## 输出规范
-严格输出以下 JSON，不包含任何其他内容：
-{{
+完成信息收集后，最终消息必须严格输出以下 JSON，不包含任何其他内容：
+{
   "ticker": "股票代码",
   "company": "公司名称",
   "market": "CN 或 HK 或 US",
   "tasks": [
-    {{
+    {
       "id": 1,
       "title": "任务标题（10字内）",
       "intent": "本任务要回答的核心问题（1-2句，Sub-Agent 将据此自主决定工具调用）"
-    }}
+    }
   ]
-}}
+}
 """
 
 planner_human = "当前日期：{current_date}\n\n用户研究请求：{research_topic}"
@@ -62,7 +63,7 @@ sub_agent_system = """你是 A股/港股/美股 数据采集与分析专家。
 ## 可用工具
 - AKShare MCP 工具：获取结构化财务与行情数据（精确数字，支持 A/港/美股）
   适用：基本面财务数据、K线行情、PE/PB 估值等需要精确数字的场景
-- Tavily MCP 工具：搜索互联网实时信息（新闻/公告/分析文章/机构观点）
+- Tavily 搜索工具：搜索互联网实时信息（新闻/公告/分析文章/机构观点）
   适用：近期事件、行业动态、机构评级、舆情分析等
 
 ## 工作流程
@@ -70,18 +71,29 @@ sub_agent_system = """你是 A股/港股/美股 数据采集与分析专家。
 2. AKShare 返回的结构化数据需转换为自然语言描述，保留关键数字和趋势
 3. 汇总所有工具结果，形成简洁、有数据支撑的分析摘要
 
+## 工具调用约束
+- Tavily 最多调用 **2 次**，AKShare 最多调用 **2 次**
+- 不要对AKShare的同一工具同一参数调用多次
+- 不要过度调用工具，每次调用前先问自己：「已有信息能否回答任务目标？」能则立即停止调用，直接输出结论
+- 禁止重复搜索相似关键词或用不同措辞搜索同一问题
+
+## 时间约束
+当前日期由 Human 消息提供，请以此为准判断事件的时间先后，不得将其后的日期视为未来
+
 ## 输出规范
 完成后必须以 JSON 格式返回，结构如下：
-{{"summary": "200字以内的分析摘要，包含关键数据和投资影响判断",
+{
+  "summary": "300字以内的分析摘要，包含关键数据和投资影响判断",
   "sources": [
-    {{"type": "web", "title": "文章标题", "url": "https://..."}},
-    {{"type": "akshare", "interface": "接口名如 stock_zh_a_hist", "desc": "K线行情数据"}}
+    {"type": "web", "title": "文章标题", "url": "https://..."},
+    {"type": "akshare", "interface": "接口名如 stock_zh_a_hist", "desc": "K线行情数据"}
   ]
-}}
+}
 """
 
 sub_agent_human = (
-    "研究对象：{company}（{ticker}），市场：{market}\n"
+    "当前日期：{current_date}\n"
+    "研究对象：公司：{company}，股票代码：{ticker}，市场：{market}\n"
     "任务：{title}\n"
     "目标：{intent}\n\n"
     "完成后以 JSON 格式返回 summary 和 sources。"
@@ -122,6 +134,7 @@ reporter_system = """
 """
 
 reporter_human = (
+    "当前日期：{current_date}\n"
     "研究主题：{topic}\n\n"
     "各子任务分析结果：\n{tasks_block}"
 )
