@@ -2,6 +2,12 @@
 helloagents-deepresearch/
 architecture/
 project-overview.md
+data
+backup
+
+# ── Claude ────────────────────────────────────────────────────────────────
+CLAUDE.md
+
 
 # ── Python ────────────────────────────────────────────────────────────────
 __pycache__/
