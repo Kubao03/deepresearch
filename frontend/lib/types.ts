@@ -8,13 +8,20 @@ export interface ProgressEvent {
   timestamp: Date
 }
 
+export interface Source {
+  type: 'web' | 'akshare' | string;
+  title?: string;
+  url?: string;
+  interface?: string; // 针对 akshare
+  desc?: string;      // 针对 akshare
+}
+
 export interface TodoItem {
-  id: number
-  title: string
-  intent: string
-  query: string
-  status: 'pending' | 'in_progress' | 'completed' | 'skipped'
-  summary?: string
-  sources_summary?: string
-  source_type?: string
+  id: number;
+  title: string;
+  intent: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'skipped';
+  summary?: string | null;
+  // 对应后端的 Optional[List[dict]]
+  sources?: Source[] | null; 
 }

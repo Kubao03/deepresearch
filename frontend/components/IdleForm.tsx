@@ -4,17 +4,13 @@ import { LogoIcon, SpinnerIcon } from './icons'
 
 export function IdleForm({
   topic,
-  searchApi,
   loading,
   onTopicChange,
-  onSearchApiChange,
   onSubmit,
 }: {
   topic: string
-  searchApi: string
   loading: boolean
   onTopicChange: (v: string) => void
-  onSearchApiChange: (v: string) => void
   onSubmit: () => void
 }) {
   const handleKey = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -35,7 +31,7 @@ export function IdleForm({
             </div>
           </div>
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-white">A股深度研究助手</h1>
+            <h1 className="text-3xl font-bold tracking-tight text-white">股票深度研究助手</h1>
             <p className="mt-2 text-gray-400 text-sm leading-relaxed">
               输入研究主题，AI 将自动规划任务、搜集资料并生成专业投研报告
             </p>
@@ -57,7 +53,7 @@ export function IdleForm({
             <p className="text-xs text-gray-600">提示：可以包含股票代码、行业名称或具体分析问题</p>
           </div>
 
-          <div className="space-y-2">
+          {/* <div className="space-y-2">
             <label className="block text-xs font-semibold uppercase tracking-wider text-gray-500">搜索引擎</label>
             <div className="relative">
               <select
@@ -75,7 +71,7 @@ export function IdleForm({
                 </svg>
               </div>
             </div>
-          </div>
+          </div> */}
 
           <button
             onClick={onSubmit}
@@ -105,7 +101,7 @@ export function IdleForm({
 
         {/* Feature tags */}
         <div className="flex flex-wrap justify-center gap-2">
-          {['自动规划', '多轮搜索', '人工审核', 'Markdown报告'].map((tag) => (
+          {['自动规划', '多轮搜索', 'AI分析', 'Markdown报告'].map((tag) => (
             <span key={tag} className="px-3 py-1 rounded-full text-xs text-gray-500 bg-white/4 border border-white/6">
               {tag}
             </span>

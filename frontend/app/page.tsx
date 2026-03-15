@@ -167,10 +167,8 @@ export default function Home() {
     return (
       <IdleForm
         topic={topic}
-        searchApi={searchApi}
         loading={false}
         onTopicChange={setTopic}
-        onSearchApiChange={setSearchApi}
         onSubmit={handleStart}
       />
     )

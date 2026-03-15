@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useCallback } from 'react'
+import { useState, useCallback, useEffect } from 'react'
 import type { TodoItem } from '@/lib/types'
 import { StatusBadge } from './ProgressTimeline'
 import { CheckIcon, SpinnerIcon, PlusIcon, TrashIcon } from './icons'
@@ -18,6 +18,23 @@ export function TodoReviewPanel({
 }) {
   const [items, setItems] = useState<TodoItem[]>(todoList)
 
+  // --- 新增：自动调整高度的逻辑 ---
+  const adjustAllHeights = () => {
+    // 找到当前面板下所有的 textarea
+    const textareas = document.querySelectorAll('textarea');
+    textareas.forEach((el) => {
+      const target = el as HTMLTextAreaElement;
+      target.style.height = 'auto';
+      target.style.height = `${target.scrollHeight}px`;
+    });
+  };
+
+  // 1. 初始化和列表增删时触发
+  useEffect(() => {
+    adjustAllHeights();
+  }, [items]);
+  // ----------------------------
+
   const updateItem = useCallback((id: number, updates: Partial<TodoItem>) => {
     setItems((prev) => prev.map((item) => (item.id === id ? { ...item, ...updates } : item)))
   }, [])
@@ -30,7 +47,14 @@ export function TodoReviewPanel({
     const newId = Math.max(0, ...items.map((i) => i.id)) + 1
     setItems((prev) => [
       ...prev,
-      { id: newId, title: '新研究任务', intent: '请描述研究意图', query: '请输入搜索关键词', status: 'pending' },
+      { 
+        id: newId, 
+        title: '新研究任务', 
+        intent: '请输入研究意图', 
+        status: 'pending',
+        summary: null,
+        sources: null 
+      },
     ])
   }, [items])
 
@@ -61,7 +85,7 @@ export function TodoReviewPanel({
                 : 'border-white/8 bg-white/3 hover:border-white/12'
             }`}
           >
-            <div className="flex items-start gap-3">
+            <div className="flex items-start gap-1">
               <div className="flex-shrink-0 w-6 h-6 rounded-full bg-blue-500/15 border border-blue-500/25 flex items-center justify-center mt-0.5">
                 <span className="text-xs font-bold text-blue-400">{idx + 1}</span>
               </div>
@@ -75,36 +99,40 @@ export function TodoReviewPanel({
                   className="w-full bg-transparent text-sm font-medium text-white placeholder-gray-600 focus:outline-none border-b border-transparent focus:border-white/20 pb-0.5 transition-colors"
                   placeholder="任务标题"
                 />
-                <p className="text-xs text-gray-500 leading-relaxed">{item.intent}</p>
-                <div className="flex items-center gap-2">
-                  <span className="text-xs text-gray-600 flex-shrink-0">搜索词:</span>
-                  <input
-                    type="text"
-                    value={item.query}
-                    onChange={(e) => updateItem(item.id, { query: e.target.value })}
+                
+                <div className="flex items-start gap-3">
+                  <span className="text-xs text-gray-600 flex-shrink-0 mt-1">意图:</span>
+                  <textarea
+                    value={item.intent}
+                    onChange={(e) => updateItem(item.id, { intent: e.target.value })}
                     disabled={item.status === 'skipped'}
-                    className="flex-1 min-w-0 bg-black/20 border border-white/8 rounded px-2 py-1 text-xs text-gray-300 font-mono focus:outline-none focus:border-blue-500/40 transition-colors"
-                    placeholder="搜索关键词"
+                    rows={1}
+                    className="w-full bg-transparent text-xs text-gray-500 leading-relaxed focus:outline-none focus:text-gray-300 transition-colors resize-none overflow-hidden"
+                    placeholder="任务研究意图"
+                    onInput={(e) => {
+                      const target = e.target as HTMLTextAreaElement;
+                      target.style.height = 'auto';
+                      target.style.height = `${target.scrollHeight}px`;
+                    }}
                   />
                 </div>
+                
                 <StatusBadge status={item.status} />
               </div>
 
-              <div className="flex items-center gap-1 flex-shrink-0">
+              <div className="flex items-center gap-0.5 flex-shrink-0">
                 <button
                   onClick={() => toggleSkip(item.id, item.status)}
-                  title={item.status === 'skipped' ? '恢复任务' : '跳过任务'}
                   className={`p-1.5 rounded text-xs transition-colors ${
                     item.status === 'skipped'
                       ? 'text-amber-400 hover:bg-amber-500/10'
                       : 'text-gray-500 hover:bg-white/8 hover:text-gray-300'
                   }`}
                 >
-                  {item.status === 'skipped' ? '↩' : '⊘'}
+                  {item.status === 'skipped' ? '恢复' : '跳过'}
                 </button>
                 <button
                   onClick={() => removeItem(item.id)}
-                  title="删除任务"
                   className="p-1.5 rounded text-gray-500 hover:bg-red-500/10 hover:text-red-400 transition-colors"
                 >
                   <TrashIcon />
@@ -119,7 +147,7 @@ export function TodoReviewPanel({
         onClick={addItem}
         className="mt-3 w-full flex items-center justify-center gap-2 py-2 rounded-lg border border-dashed border-white/15 text-sm text-gray-500 hover:border-blue-500/30 hover:text-blue-400 hover:bg-blue-500/5 transition-all duration-200"
       >
-        <PlusIcon />
+        <span className="w-3.5 h-3.5"><PlusIcon /></span>
         添加研究任务
       </button>
 
@@ -137,9 +165,9 @@ export function TodoReviewPanel({
           className="flex-[2] py-2.5 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 text-sm font-semibold text-white hover:from-blue-500 hover:to-blue-400 transition-all duration-200 disabled:opacity-50 flex items-center justify-center gap-2 shadow-lg shadow-blue-500/20"
         >
           {loading ? (
-            <><SpinnerIcon size={14} />提交中...</>
+            <><span className="w-3.5 h-3.5 animate-spin"><SpinnerIcon /></span>提交中...</>
           ) : (
-            <><CheckIcon size={14} />确认并开始研究</>
+            <><span className="w-3.5 h-3.5"><CheckIcon /></span>确认并开始研究</>
           )}
         </button>
       </div>
