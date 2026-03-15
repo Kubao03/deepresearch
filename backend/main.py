@@ -4,9 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import sys
 import time
-from typing import Any, Iterator, List, Optional
+from contextlib import asynccontextmanager
+from typing import Any, AsyncIterator, List
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -14,8 +16,9 @@ from fastapi.responses import StreamingResponse
 from loguru import logger
 from pydantic import BaseModel, Field
 
-from config import Configuration, SearchAPI
+from config import Configuration
 from graph.graph import build_graph
+from tools.mcp_client import start_mcp, stop_mcp
 
 # ── 日志 ──────────────────────────────────────────────────────────────────────
 logging.basicConfig(level=logging.INFO, stream=sys.stderr,
@@ -28,15 +31,12 @@ logger.add(
     colorize=True,
 )
 
-# ── 全局图实例（应用启动时构建一次）─────────────────────────────────────────────
-graph = build_graph(db_path="./data")
 
 
 # ── 请求模型 ───────────────────────────────────────────────────────────────────
 
 class ResearchRequest(BaseModel):
     topic: str = Field(..., description="研究主题或股票代码")
-    search_api: Optional[SearchAPI] = Field(default=None, description="覆盖默认搜索后端")
 
 
 class ResumeRequest(BaseModel):
@@ -46,12 +46,11 @@ class ResumeRequest(BaseModel):
 
 # ── 辅助函数 ──────────────────────────────────────────────────────────────────
 
-def _build_config(thread_id: str, search_api: Optional[SearchAPI] = None) -> dict:
-    overrides = {"search_api": search_api.value} if search_api else {}
+def _build_config(thread_id: str) -> dict:
     return {
         "configurable": {
             "thread_id": thread_id,
-            "app_config": Configuration.from_env(overrides=overrides),
+            "app_config": Configuration.from_env(),
         }
     }
 
@@ -64,7 +63,6 @@ def _json_default(obj: Any) -> Any:
             return {"value": obj.value, "id": obj.id}
     except ImportError:
         pass
-    # 兜底：转字符串
     return str(obj)
 
 
@@ -75,7 +73,28 @@ def _sse(payload: Any) -> str:
 # ── 应用工厂 ──────────────────────────────────────────────────────────────────
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="A股深度研究助手")
+
+    @asynccontextmanager
+    async def lifespan(app: FastAPI):
+
+        db_path = "./data"
+        os.makedirs(db_path, exist_ok=True)
+        db_file = os.path.join(db_path, "checkpoints.db")
+
+        from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver
+        
+        # 开启异步 SQLite 连接
+        async with AsyncSqliteSaver.from_conn_string(db_file) as saver:
+            # 3. 这里是“组装”的地方
+            # 调用普通的 build_graph，传入 saver
+            app.state.graph = build_graph(saver) 
+            
+            logger.info("🚀 系统已就绪，数据库连接已开启")
+            await start_mcp()
+            yield # 只要服务器开着，程序就停在这里，saver 也会一直保持连接
+            await stop_mcp()
+
+    app = FastAPI(title="A股深度研究助手", lifespan=lifespan)
 
     app.add_middleware(
         CORSMiddleware,
@@ -90,20 +109,14 @@ def create_app() -> FastAPI:
         return {"status": "ok"}
 
     @app.post("/research/stream")
-    def stream_research(payload: ResearchRequest) -> StreamingResponse:
-        """启动研究流程，以 SSE 流式推送进度。
-
-        流程：
-        1. 向图注入初始 State（topic + 空 summaries）
-        2. Planner 生成 TODO 后触发 interrupt()，前端收到 __interrupt__ 事件
-        3. 用户确认后调用 /research/resume 继续执行
-        """
+    async def stream_research(payload: ResearchRequest) -> StreamingResponse:
+        graph = app.state.graph
+        """启动研究流程，以 SSE 流式推送进度。"""
         thread_id = f"{payload.topic}-{int(time.time())}"
-        config = _build_config(thread_id, payload.search_api)
+        config = _build_config(thread_id)
 
         initial_state = {
             "topic": payload.topic,
-            "user_profile": {},
             "todo_list": [],
             "summaries": [],
             "final_report": "",
@@ -111,10 +124,10 @@ def create_app() -> FastAPI:
             "thread_id": thread_id,
         }
 
-        def event_stream() -> Iterator[str]:
+        async def event_stream() -> AsyncIterator[str]:
             yield _sse({"type": "thread_id", "thread_id": thread_id})
             try:
-                for event in graph.stream(
+                async for event in graph.astream(
                     initial_state, config=config, stream_mode="updates"
                 ):
                     yield _sse(event)
@@ -129,20 +142,16 @@ def create_app() -> FastAPI:
         )
 
     @app.post("/research/resume")
-    def resume_research(payload: ResumeRequest) -> StreamingResponse:
-        """Human Review 确认后，恢复暂停的研究流程。
-
-        将用户确认的 todo_list 通过 Command(resume=...) 注入，
-        图从 interrupt() 处继续执行 executor → reporter。
-        """
+    async def resume_research(payload: ResumeRequest) -> StreamingResponse:
+        """Human Review 确认后，恢复暂停的研究流程。"""
         from langgraph.types import Command
-
+        graph = app.state.graph
         config = _build_config(payload.thread_id)
 
-        def event_stream() -> Iterator[str]:
-            yield _sse({"type": "resume_start"})  # 立即打通 SSE 连接，防止代理缓冲
+        async def event_stream() -> AsyncIterator[str]:
+            yield _sse({"type": "resume_start"})
             try:
-                for mode, event in graph.stream(
+                async for _, event in graph.astream(
                     Command(resume=payload.reviewed_todo_list),
                     config=config,
                     stream_mode=["updates", "custom"],

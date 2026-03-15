@@ -2,54 +2,78 @@
 
 from __future__ import annotations
 
+import json
 import logging
+import re
 
+from langchain_core.messages import HumanMessage
 from langchain_core.runnables import RunnableConfig
+from langchain_openai import ChatOpenAI
 from langgraph.config import get_stream_writer
 from langgraph.types import interrupt
 
 from graph.state import ResearchState
+from prompts import sub_agent_human, sub_agent_system
 from services.planner import PlanningService
 from services.reporter import ReportingService
-from services.search import dispatch_search, prepare_research_context
-from services.summarizer import SummarizationService
 
 logger = logging.getLogger(__name__)
 
 
 def planner_node(state: ResearchState, config: RunnableConfig) -> dict:
-    """将研究主题拆解为结构化 TODO 列表，并通过 interrupt() 等待用户确认。
-
-    interrupt() 触发后：
-    - LangGraph 将当前 State 序列化写入 SQLite Checkpointer
-    - 图执行暂停，前端收到 __interrupt__ 事件
-    - 用户确认/修改后，通过 /research/resume 接口传入 Command(resume=...)
-    - 图从此处恢复，reviewed 拿到用户确认的 todo_list
-    """
+    """将研究主题拆解为结构化 TODO 列表，并通过 interrupt() 等待用户确认。"""
     app_config = config["configurable"]["app_config"]
     planner = PlanningService(app_config)
-    todo_list = planner.plan_todo_list(state)
+    plan_result = planner.plan(state)
 
-    reviewed = interrupt({"type": "todo_review", "todo_list": todo_list})
+    reviewed = interrupt({
+        "type": "todo_review",
+        "todo_list": plan_result["todo_list"],
+        "ticker": plan_result["ticker"],
+        "company": plan_result["company"],
+        "market": plan_result["market"],
+    })
 
-    return {"todo_list": reviewed, "research_loop_count": 0}
+    return {
+        "ticker": plan_result["ticker"],
+        "company": plan_result["company"],
+        "market": plan_result["market"],
+        "todo_list": reviewed,
+        "research_loop_count": 0,
+    }
 
 
-def executor_node(state: ResearchState, config: RunnableConfig) -> dict:
-    """对 todo_list 中每个子任务执行搜索 + 摘要，结果追加到 summaries。
+async def executor_node(state: ResearchState, config: RunnableConfig) -> dict:
+    """对 todo_list 中每个子任务运行 Sub-Agent（LLM + MCP 工具），结果追加到 summaries。
 
-    operator.add reducer 会将本次的 new_summaries 追加到已有的 summaries，
-    因此多次调用（断点续研）不会覆盖之前的结果。
+    Sub-Agent 自主决定调用 tavily-mcp（网络搜索）或 mcp-aktools（结构化数据），顺序执行。
     """
+    from langchain.agents import create_agent
+    from tools.mcp_client import get_tools
+
     app_config = config["configurable"]["app_config"]
-    summarizer = SummarizationService(app_config)
-    new_summaries = []
     writer = get_stream_writer()
+
+    llm = ChatOpenAI(
+        model=app_config.llm_model_id,
+        api_key=app_config.llm_api_key,
+        base_url=app_config.llm_base_url,
+        timeout=app_config.llm_timeout,
+        temperature=0.0,
+    )
+
+    tools = get_tools()
+    agent = create_agent(llm, tools, system_prompt=sub_agent_system)
+
+    ticker = state.get("ticker", "")
+    company = state.get("company", state["topic"])
+    market = state.get("market", "CN")
 
     todo = state["todo_list"]
     total = sum(1 for t in todo if t["status"] != "completed")
-
     done_count = 0
+    new_summaries = []
+
     for task in todo:
         if task["status"] == "completed":
             continue
@@ -63,42 +87,40 @@ def executor_node(state: ResearchState, config: RunnableConfig) -> dict:
             "total": total,
         })
 
-        search_result, _, answer_text, backend = dispatch_search(
-            task["query"], app_config, state["research_loop_count"]
+        human_msg = sub_agent_human.format(
+            company=company,
+            ticker=ticker,
+            market=market,
+            title=task["title"],
+            intent=task["intent"],
         )
 
-        if not search_result or not search_result.get("results"):
-            new_summaries.append(
-                {
-                    "task_id": task["id"],
-                    "task_title": task["title"],
-                    "content": "暂无可用信息",
-                    "source_type": "web",
-                    "sources": [],
-                    "sources_summary": "",
-                }
-            )
-            done_count += 1
-            writer({"type": "task_done", "task_id": task["id"], "current": done_count, "total": total})
-            continue
+        summary_text = "暂无可用信息"
+        sources: list = []
 
-        sources_summary, context = prepare_research_context(
-            search_result, answer_text, app_config
-        )
-        summary_text = summarizer.summarize_task(state, task, context)
+        try:
+            result = await agent.ainvoke({"messages": [HumanMessage(content=human_msg)]})
+            raw_content = result["messages"][-1].content
+            parsed = _parse_agent_response(raw_content)
+            summary_text = parsed.get("summary") or raw_content
+            sources = parsed.get("sources") or []
+        except Exception as exc:
+            logger.exception("任务 [%d] Sub-Agent 执行失败：%s", task["id"], exc)
 
-        new_summaries.append(
-            {
-                "task_id": task["id"],
-                "task_title": task["title"],
-                "content": summary_text,
-                "source_type": backend,
-                "sources": search_result.get("results", [])[:3],
-                "sources_summary": sources_summary,
-            }
-        )
+        new_summaries.append({
+            "task_id": task["id"],
+            "task_title": task["title"],
+            "content": summary_text,
+            "sources": sources,
+        })
         done_count += 1
-        writer({"type": "task_done", "task_id": task["id"], "task_title": task["title"], "current": done_count, "total": total})
+        writer({
+            "type": "task_done",
+            "task_id": task["id"],
+            "task_title": task["title"],
+            "current": done_count,
+            "total": total,
+        })
 
     return {
         "summaries": new_summaries,
@@ -112,3 +134,22 @@ def reporter_node(state: ResearchState, config: RunnableConfig) -> dict:
     reporter = ReportingService(app_config)
     report = reporter.generate_report(state)
     return {"final_report": report}
+
+
+# ── 内部工具 ──────────────────────────────────────────────────────────────────
+
+def _parse_agent_response(content: str) -> dict:
+    """从 Sub-Agent 最终消息中提取 JSON 响应 {"summary": ..., "sources": [...]}。"""
+    # 直接解析
+    try:
+        return json.loads(content)
+    except (json.JSONDecodeError, TypeError):
+        pass
+    # 从 markdown 代码块中提取
+    match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
+    if match:
+        try:
+            return json.loads(match.group(1))
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return {}

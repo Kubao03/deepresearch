@@ -7,6 +7,8 @@ langgraph>=1.0.0
 langgraph-checkpoint-sqlite
 langchain-core>=1.0.0
 langchain-openai>=1.0.0
+langsmith>=0.2.0
+aiosqlite
 
 # 搜索
 ddgs>=9.6.1
