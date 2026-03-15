@@ -1,19 +1,24 @@
 # Web 框架
-fastapi>=0.115.0
-uvicorn[standard]>=0.32.0
+fastapi==0.128.0
+uvicorn[standard]==0.40.0
 
 # LangGraph & LangChain
-langgraph>=1.0.0
-langgraph-checkpoint-sqlite
-langchain-core>=1.0.0
-langchain-openai>=1.0.0
-langsmith>=0.2.0
-aiosqlite
+langgraph==1.0.10
+langgraph-checkpoint-sqlite==3.0.3
+langchain==1.2.10
+langchain-core==1.2.17
+langchain-openai==1.1.10
+langchain-mcp-adapters==0.2.1
+langchain-tavily==0.2.17
+langsmith==0.7.13
 
-# 搜索
-ddgs>=9.6.1
+# 数据库
+aiosqlite==0.22.1
 
 # 工具
 python-dotenv>=1.0.1
-pydantic>=2.0.0
-loguru>=0.7.3
+pydantic==2.12.5
+
+# AKShare MCP 服务通过 uvx 运行，无需 pip 安装
+# 安装 uv：pip install uv  或  curl -LsSf https://astral.sh/uv/install.sh | sh
+# 运行：uvx mcp-aktools（由后端启动时自动调用）

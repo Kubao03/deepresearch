@@ -2,6 +2,9 @@
   "name": "stockresearch-frontend",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=20.0.0"
+  },
   "scripts": {
     "dev": "NODE_NO_WARNINGS=1 next dev",
     "build": "next build",
