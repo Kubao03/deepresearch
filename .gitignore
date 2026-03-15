@@ -1,9 +1,8 @@
 # ── 原版参考项目（只读，不纳入版本管理）──────────────────────────────────
-helloagents-deepresearch/
-architecture/
 project-overview.md
 data
 backup
+report
 
 # ── Claude ────────────────────────────────────────────────────────────────
 CLAUDE.md
