@@ -84,10 +84,10 @@ def _parse_json(content: str) -> dict:
         except (json.JSONDecodeError, TypeError):
             pass
 
-    last_brace = content.rfind("{")
-    if last_brace != -1:
+    match = re.search(r'\{\s*"summary"\s*:', content)
+    if match:
         try:
-            return json.loads(content[last_brace:])
+            return json.loads(content[match.start():])
         except (json.JSONDecodeError, TypeError):
             pass
 
