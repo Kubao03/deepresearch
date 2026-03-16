@@ -73,8 +73,6 @@ class PlanningService:
                     title=str(item.get("title") or f"任务 {idx}").strip(),
                     intent=str(item.get("intent") or "").strip(),
                     status="pending",
-                    summary=None,
-                    sources=None,
                 )
             )
 
@@ -112,6 +110,4 @@ def _fallback_task(topic: str) -> TodoItem:
         title="综合研究",
         intent=f"全面了解 {topic} 的基本情况与近期动态，包括财务状况和市场表现",
         status="pending",
-        summary=None,
-        sources=None,
     )

@@ -1,4 +1,4 @@
-export type Phase = 'idle' | 'streaming' | 'reviewing' | 'executing' | 'done' | 'error'
+export type Phase = 'idle' | 'streaming' | 'reviewing' | 'executing' | 'review_results' | 'reporting' | 'done' | 'error'
 
 export interface ProgressEvent {
   id: number
@@ -27,7 +27,12 @@ export interface TodoItem {
   title: string;
   intent: string;
   status: 'pending' | 'in_progress' | 'completed' | 'skipped';
-  summary?: string | null;
-  // 对应后端的 Optional[List[dict]]
-  sources?: Source[] | null; 
+}
+
+export interface TaskState {
+  id: number;
+  title: string;
+  status: 'pending' | 'in_progress' | 'completed';
+  summary?: string;
+  sources?: Source[];
 }

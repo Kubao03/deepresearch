@@ -1,39 +1,31 @@
-"""ExecutionService：对每个子任务运行 Sub-Agent，返回摘要与来源。"""
+"""ExecutionService：运行单个 Sub-Agent，返回摘要与来源。"""
 
 from __future__ import annotations
 
 import json
 import logging
 import re
-from typing import List
 
 from langchain_core.messages import HumanMessage
 from langchain_openai import ChatOpenAI
 
 from config import Configuration
-from graph.state import ResearchState, TodoItem
+from graph.state import TodoItem
 from prompts import get_current_date, sub_agent_human, sub_agent_system
 
 logger = logging.getLogger(__name__)
 
 
 class ExecutionService:
-    """为每个研究子任务运行 Sub-Agent（LLM + 工具），收集摘要与来源。"""
+    """为单个研究子任务运行 Sub-Agent（LLM + 工具），收集摘要与来源。"""
 
     def __init__(self, config: Configuration) -> None:
         self._config = config
 
-    async def run_tasks(
-        self,
-        state: ResearchState,
-        on_task_start=None,
-        on_task_done=None,
-    ) -> List[dict]:
+    async def run_single(self, task: TodoItem, company: str, ticker: str, market: str) -> tuple[str, list]:
         """
-        顺序执行 todo_list 中所有 pending 任务。
-
-        on_task_start / on_task_done：可选回调，接收任务进度信息 dict，
-        供 executor_node 通过 stream_writer 推送前端进度。
+        为一个子任务创建 Sub-Agent 并执行，返回 (summary_text, sources)。
+        供 sub_agent_node 调用，每个并行任务独立建立 LLM / Agent 实例。
         """
         from langchain.agents import create_agent
         from tools import get_tools
@@ -47,41 +39,9 @@ class ExecutionService:
         )
 
         agent = create_agent(llm, get_tools(), system_prompt=sub_agent_system)
+        return await self._run_single(agent, task, company, ticker, market)
 
-        ticker = state.get("ticker", "")
-        company = state.get("company", state["topic"])
-        market = state.get("market", "CN")
-
-        todo = state["todo_list"]
-        total = sum(1 for t in todo if t["status"] != "completed")
-        done_count = 0
-        summaries: List[dict] = []
-
-        for task in todo:
-            if task["status"] == "completed":
-                continue
-
-            logger.info("执行任务 [%d] %s", task["id"], task["title"])
-            if on_task_start:
-                on_task_start({"type": "task_start", "task_id": task["id"],
-                               "task_title": task["title"], "current": done_count + 1, "total": total})
-
-            summary_text, sources = await self._run_single(agent, task, company, ticker, market)
-
-            summaries.append({
-                "task_id": task["id"],
-                "task_title": task["title"],
-                "content": summary_text,
-                "sources": sources,
-            })
-            done_count += 1
-            if on_task_done:
-                on_task_done({"type": "task_done", "task_id": task["id"],
-                              "task_title": task["title"], "current": done_count, "total": total})
-
-        return summaries
-
-    async def _run_single(self, agent, task: TodoItem, company: str, ticker: str, market: str):
+    async def _run_single(self, agent, task: TodoItem, company: str, ticker: str, market: str) -> tuple[str, list]:
         """运行单个子任务，返回 (summary_text, sources)。"""
         human_msg = sub_agent_human.format(
             current_date=get_current_date(),

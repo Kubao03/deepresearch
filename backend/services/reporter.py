@@ -9,7 +9,6 @@ from langchain_openai import ChatOpenAI
 from config import Configuration
 from graph.state import ResearchState
 from prompts import get_current_date, reporter_human, reporter_system
-from utils import strip_thinking_tokens, strip_tool_calls
 
 
 class ReportingService:
@@ -35,24 +34,21 @@ class ReportingService:
             | StrOutputParser()
         )
 
-    def generate_report(self, state: ResearchState) -> str:
-        """生成最终投资研究报告。"""
+    async def generate_report_stream(self, state: ResearchState, writer) -> str:
+        """流式生成报告：每个 token 通过 writer 推送 report_chunk 事件，返回完整文本。"""
         tasks_block = self._build_tasks_block(state)
 
-        response = self._chain.invoke(
-            {   
-                "current_date": get_current_date(),
-                "topic": state["topic"],
-                "tasks_block": tasks_block,
-            }
-        )
+        full_text = ""
+        async for chunk in self._chain.astream({
+            "current_date": get_current_date(),
+            "topic": state["topic"],
+            "tasks_block": tasks_block,
+        }):
+            full_text += chunk
+            if chunk:
+                writer({"type": "report_chunk", "content": chunk})
 
-        text = response.strip()
-        if self._config.strip_thinking_tokens:
-            text = strip_thinking_tokens(text)
-        text = strip_tool_calls(text).strip()
-
-        return text or "报告生成失败，请检查输入。"
+        return full_text.strip() or "报告生成失败，请检查输入。"
 
     @staticmethod
     def _build_tasks_block(state: ResearchState) -> str:
@@ -66,7 +62,6 @@ class ReportingService:
                 f"### 任务 {s.get('task_id', '?')}：{s.get('task_title', '')}\n\n"
                 f"{s.get('content', '暂无可用信息')}\n"
             )
-
             sources: list = s.get("sources") or []
             if sources:
                 source_lines = []
@@ -77,6 +72,6 @@ class ReportingService:
                         source_lines.append(f"- [结构化数据] {src.get('interface', '')}：{src.get('desc', '')}")
                 if source_lines:
                     block += "\n**来源**：\n" + "\n".join(source_lines) + "\n"
-
             parts.append(block)
+
         return "\n".join(parts)

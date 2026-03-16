@@ -38,7 +38,7 @@ class ResearchRequest(BaseModel):
 
 class ResumeRequest(BaseModel):
     thread_id: str = Field(..., description="待恢复的研究线程 ID")
-    reviewed_todo_list: List[dict] = Field(..., description="用户确认/修改后的 TODO 列表")
+    reviewed_todo_list: List[dict] | None = Field(None, description="用户确认/修改后的 TODO 列表（结果确认阶段传 null）")
 
 
 # ── 辅助函数 ──────────────────────────────────────────────────────────────────
@@ -117,15 +117,14 @@ def create_app() -> FastAPI:
             "todo_list": [],
             "summaries": [],
             "final_report": "",
-            "research_loop_count": 0,
             "thread_id": thread_id,
         }
 
         async def event_stream() -> AsyncIterator[str]:
             yield _sse({"type": "thread_id", "thread_id": thread_id})
             try:
-                async for event in graph.astream(
-                    initial_state, config=config, stream_mode="updates"
+                async for _, event in graph.astream(
+                    initial_state, config=config, stream_mode=["updates", "custom"]
                 ):
                     yield _sse(event)
             except Exception as exc:
@@ -149,7 +148,7 @@ def create_app() -> FastAPI:
             yield _sse({"type": "resume_start"})
             try:
                 async for _, event in graph.astream(
-                    Command(resume=payload.reviewed_todo_list),
+                    Command(resume=payload.reviewed_todo_list if payload.reviewed_todo_list is not None else True),
                     config=config,
                     stream_mode=["updates", "custom"],
                 ):

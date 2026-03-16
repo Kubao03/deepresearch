@@ -99,7 +99,7 @@ export async function streamResearch(
 }
 
 export async function resumeResearch(
-  payload: { thread_id: string; reviewed_todo_list: TodoItem[] },
+  payload: { thread_id: string; reviewed_todo_list: TodoItem[] | null },
   onEvent: (event: unknown) => void,
   signal?: AbortSignal
 ): Promise<void> {

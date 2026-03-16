@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import operator
-from typing import Annotated, List, Optional, TypedDict
+from typing import Annotated, List, TypedDict
 
 
 class TodoItem(TypedDict):
@@ -11,12 +11,8 @@ class TodoItem(TypedDict):
 
     id: int
     title: str
-    intent: str                      # 本任务目标（Sub-Agent 自主决定工具调用参数）
-    status: str                      # pending / in_progress / completed
-    # Sub-Agent 完成后填写，供前端任务卡片展示 & Reporter 汇总使用
-    summary: Optional[str]
-    sources: Optional[List[dict]]    # [{"type":"web","title":"...","url":"..."} 或
-                                     #  {"type":"akshare","interface":"...","desc":"..."}]
+    intent: str    # 本任务目标（Sub-Agent 自主决定工具调用参数）
+    status: str    # pending / in_progress / completed / skipped
 
 
 class ResearchState(TypedDict):
@@ -40,14 +36,15 @@ class ResearchState(TypedDict):
     final_report: str
 
     # 流程控制
-    research_loop_count: int
     thread_id: str
 
 
-# class SubAgentState(TypedDict):
-#     """Send API 分发给每个并行 Sub-Agent 的局部状态。"""
+class SubAgentState(TypedDict):
+    """Send API 分发给每个并行 Sub-Agent 的局部状态。"""
 
-#     task: TodoItem
-#     ticker: str
-#     company: str
-#     market: str
+    task: TodoItem
+    ticker: str
+    company: str
+    market: str
+    total: int       # 本轮并行任务总数（用于前端进度显示）
+    task_index: int  # 当前任务在 todo_list 中的序号（0-based）

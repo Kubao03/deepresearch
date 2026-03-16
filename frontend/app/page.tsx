@@ -1,12 +1,13 @@
 'use client'
 
 import { useState, useRef, useCallback, useEffect } from 'react'
-import type { Phase, ProgressEvent, TodoItem, CompanyInfo } from '@/lib/types'
+import type { Phase, ProgressEvent, TodoItem, CompanyInfo, TaskState, Source } from '@/lib/types'
 import { streamResearch, resumeResearch } from '@/lib/api'
 import { LogoIcon, SpinnerIcon } from '@/components/icons'
 import { ProgressTimeline } from '@/components/ProgressTimeline'
 import { TodoReviewPanel } from '@/components/TodoReview'
 import { ReportPanel, ReportPlaceholder } from '@/components/ReportPanel'
+import { TaskCardsPanel } from '@/components/TaskCardsPanel'
 import { IdleForm } from '@/components/IdleForm'
 
 export default function Home() {
@@ -20,6 +21,7 @@ export default function Home() {
   const [error, setError] = useState('')
   const [resumeLoading, setResumeLoading] = useState(false)
   const [companyInfo, setCompanyInfo] = useState<CompanyInfo | null>(null)
+  const [taskStates, setTaskStates] = useState<TaskState[]>([])
 
   const eventIdRef = useRef(0)
   const abortRef = useRef<AbortController | null>(null)
@@ -63,30 +65,54 @@ export default function Home() {
             addEvent(`规划完成，共 ${interrupt.value.todo_list.length} 个研究任务，等待确认`, 'success')
             return
           }
+          if (interrupt.value?.type === 'results_review') {
+            onPhaseChange('review_results')
+            addEvent('所有研究任务已完成，请确认后生成报告', 'success')
+            return
+          }
         }
       }
 
       if (ev.planner !== undefined) addEvent('Planner 已完成任务规划', 'success')
-      if (ev.executor !== undefined) addEvent('所有研究任务已执行完毕', 'success')
+      if (ev.executor !== undefined) addEvent('开始并行执行所有研究任务...', 'info')
 
       if (ev.type === 'task_start') {
-        const { task_title, current, total } = ev as { task_title: string; current: number; total: number }
-        addEvent(`[${current}/${total}] 正在执行：${task_title}`, 'info')
+        const { task_id, task_title, task_index, total } = ev as { task_id: number; task_title: string; task_index: number; total: number }
+        setTaskStates((prev) => prev.map((t) => t.id === task_id ? { ...t, status: 'in_progress' } : t))
+        addEvent(`[${task_index + 1}/${total}] 正在执行：${task_title}`, 'info')
       }
 
       if (ev.type === 'task_done') {
-        const { task_title, current, total } = ev as { task_title: string; current: number; total: number }
-        addEvent(`[${current}/${total}] 完成：${task_title}`, 'success')
+        const { task_title, task_index, total } = ev as { task_title: string; task_index: number; total: number }
+        addEvent(`[${task_index + 1}/${total}] 完成：${task_title}`, 'success')
+      }
+
+      if (ev.sub_agent !== undefined) {
+        const data = ev.sub_agent as { summaries?: Array<{ task_id: number; content: string; sources: Source[] }> }
+        const item = data.summaries?.[0]
+        if (item) {
+          setTaskStates((prev) =>
+            prev.map((t) =>
+              t.id === item.task_id
+                ? { ...t, status: 'completed', summary: item.content, sources: item.sources }
+                : t
+            )
+          )
+        }
+      }
+
+      if (ev.type === 'report_chunk') {
+        const { content } = ev as { content: string }
+        setFinalReport((prev) => prev + content)
       }
 
       if (ev.reporter !== undefined) {
-        addEvent('Reporter 正在生成报告...', 'info')
         const reporterData = ev.reporter as Record<string, unknown>
         if (typeof reporterData.final_report === 'string') {
           setFinalReport(reporterData.final_report)
-          onPhaseChange('done')
-          addEvent('研究报告已生成', 'success')
         }
+        onPhaseChange('done')
+        addEvent('研究报告已生成', 'success')
       }
     },
     [addEvent]
@@ -124,11 +150,42 @@ export default function Home() {
     }
   }, [topic, searchApi, addEvent, handleSSEEvent])
 
+  const handleGenerateReport = useCallback(async () => {
+    if (!threadId) return
+    setPhase('reporting')
+    addEvent('开始生成研究报告...', 'info')
+    abortRef.current?.abort()
+    const abort = new AbortController()
+    abortRef.current = abort
+
+    let currentPhase: Phase = 'reporting'
+    const onPhaseChange = (p: Phase) => { currentPhase = p; setPhase(p) }
+
+    try {
+      await resumeResearch(
+        { thread_id: threadId, reviewed_todo_list: null },
+        (event) => handleSSEEvent(event, currentPhase, onPhaseChange),
+        abort.signal
+      )
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return
+      const msg = err instanceof Error ? err.message : '未知错误'
+      setError(msg)
+      setPhase('error')
+      addEvent(`生成失败: ${msg}`, 'warning')
+    }
+  }, [threadId, addEvent, handleSSEEvent])
+
   const handleResume = useCallback(
     async (reviewedItems: TodoItem[]) => {
       if (!threadId) return
       setResumeLoading(true)
       setPhase('executing')
+      setTaskStates(
+        reviewedItems
+          .filter((t) => t.status !== 'completed')
+          .map((t) => ({ id: t.id, title: t.title, status: 'pending' as const }))
+      )
       addEvent('提交确认，开始执行研究任务...', 'info')
       abortRef.current?.abort()
       const abort = new AbortController()
@@ -166,6 +223,7 @@ export default function Home() {
     setThreadId('')
     setTodoList([])
     setCompanyInfo(null)
+    setTaskStates([])
   }, [])
 
   useEffect(() => () => { abortRef.current?.abort() }, [])
@@ -217,6 +275,8 @@ export default function Home() {
               {phase === 'streaming' && '规划中'}
               {phase === 'reviewing' && '等待确认'}
               {phase === 'executing' && <><SpinnerIcon size={10} />执行中</>}
+              {phase === 'review_results' && '等待确认'}
+              {phase === 'reporting' && <><SpinnerIcon size={10} />生成报告中</>}
               {phase === 'done' && '✓ 完成'}
               {phase === 'error' && '✗ 错误'}
             </div>
@@ -258,11 +318,34 @@ export default function Home() {
                 loading={resumeLoading}
               />
             )}
+
+            {phase === 'review_results' && (
+              <div className="glass-card p-5 fade-in-up">
+                <h2 className="text-base font-semibold text-white mb-1">确认研究结果</h2>
+                <p className="text-xs text-gray-500 mb-4">所有子任务已完成，确认后开始生成投资报告</p>
+                <button
+                  onClick={handleGenerateReport}
+                  className="w-full py-2.5 rounded-lg bg-gradient-to-r from-blue-600 to-blue-500 text-sm font-semibold text-white hover:from-blue-500 hover:to-blue-400 transition-all duration-200 shadow-lg shadow-blue-500/20"
+                >
+                  生成研究报告
+                </button>
+                <button
+                  onClick={handleCancel}
+                  className="mt-2 w-full py-2 rounded-lg border border-white/10 text-xs text-gray-400 hover:bg-white/5 hover:text-gray-300 transition-all duration-200"
+                >
+                  放弃
+                </button>
+              </div>
+            )}
           </div>
 
           {/* Right panel */}
           <div className="flex-1 min-w-0 min-h-0 overflow-hidden" style={{ height: 'calc(100vh - 120px)' }}>
-            {finalReport ? <ReportPanel report={finalReport} /> : <ReportPlaceholder phase={phase} />}
+            {finalReport
+              ? <ReportPanel report={finalReport} />
+              : taskStates.length > 0
+              ? <TaskCardsPanel tasks={taskStates} />
+              : <ReportPlaceholder phase={phase} />}
           </div>
         </div>
       </main>
