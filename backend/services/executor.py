@@ -65,15 +65,30 @@ class ExecutionService:
 
 
 def _parse_json(content: str) -> dict:
-    """从 Sub-Agent 最终消息中提取 JSON。"""
+    """从 Sub-Agent 最终消息中提取 JSON。
+
+    依次尝试三种格式：
+    1. 整段内容就是 JSON
+    2. ```json ... ``` 代码块
+    3. 文字末尾跟着裸 JSON 对象（取最后一个 { 到末尾）
+    """
     try:
         return json.loads(content)
     except (json.JSONDecodeError, TypeError):
         pass
+
     match = re.search(r"```(?:json)?\s*(\{.*?\})\s*```", content, re.DOTALL)
     if match:
         try:
             return json.loads(match.group(1))
         except (json.JSONDecodeError, TypeError):
             pass
+
+    last_brace = content.rfind("{")
+    if last_brace != -1:
+        try:
+            return json.loads(content[last_brace:])
+        except (json.JSONDecodeError, TypeError):
+            pass
+
     return {}
