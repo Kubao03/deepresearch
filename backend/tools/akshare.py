@@ -3,8 +3,11 @@
 from __future__ import annotations
 
 import logging
+import os
 
 logger = logging.getLogger(__name__)
+
+_AKTOOLS_URL = os.getenv("AKTOOLS_URL", "http://localhost:8808/mcp")
 
 # 白名单：只有这些工具会暴露给 Agent
 TOOL_WHITELIST: set[str] = {
@@ -28,9 +31,8 @@ async def start() -> None:
 
         client = MultiServerMCPClient({
             "aktools": {
-                "command": "uvx",
-                "args": ["mcp-aktools"],
-                "transport": "stdio",
+                "url": _AKTOOLS_URL,
+                "transport": "http",
             }
         })
 
@@ -40,7 +42,14 @@ async def start() -> None:
         logger.info("MCP[aktools] 已启动，启用工具：%s", enabled)
 
     except Exception as exc:
-        logger.error("MCP[aktools] 启动失败：%s", exc)
+        import traceback
+        logger.error("MCP[aktools] 启动失败：%s\n%s", exc, traceback.format_exc())
+        if hasattr(exc, "__notes__"):
+            for note in exc.__notes__:
+                logger.error("  note: %s", note)
+        if hasattr(exc, "exceptions"):
+            for sub in exc.exceptions:
+                logger.error("  sub-exception: %s\n%s", sub, traceback.format_exception(sub))
         _tools = []
 
 
