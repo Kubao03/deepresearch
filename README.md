@@ -1,4 +1,4 @@
-# A股深度研究助手
+# 股票深度研究助手
 
 基于 LangGraph + FastAPI + Next.js 16 构建的 AI 投研 Agent，支持 A股/港股/美股，多工具协同搜索，两阶段 Human-in-the-Loop 审核，SSE 实时进度推送。
 
